@@ -1,44 +1,42 @@
-<div align="center">
+# imgen · Huashan fork
 
-# 🎨 imgen · AI 图片生成 CLI
+一个面向命令行与 AI Skill 的图片生成/编辑工具，支持文生图、图生图、透明背景和最高 4K 输出。
 
-**ChatGPT 付费账号 + 命令行** —— 一条命令生成图片，支持文生图、图生图，最高 4K，零额外配置。
-
-![License](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)
-![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
-![Claude Code](https://img.shields.io/badge/Claude%20Code-skill-blueviolet)
-![Codex](https://img.shields.io/badge/Codex-skill-black)
-![Gemini CLI](https://img.shields.io/badge/Gemini%20CLI-skill-blue)
-
-</div>
+本仓库基于 [lawrencewzen/imgen](https://github.com/lawrencewzen/imgen) 的 MIT 许可代码维护。当前是本地开发 fork；个人 GitHub 远端尚未创建，因此没有把第三方上游误设为可推送的 `origin`。来源、基线与同步方式见 [FORK.md](FORK.md)。
 
 ## ✨ Features
 
 - 🖼️ **文生图 & 图生图** — 一条命令，从文字生成图片或修改已有图片
-- 🔑 **零配置** — 复用本地 Codex 登录状态，无需单独申请 API Key
+- 🔑 **两种认证路径** — 可复用 Codex 登录，也可通过 OpenAI API Key 明确选择图片模型
 - 📐 **最高 4K 分辨率** — 支持到 3840×2160（4K UHD）
 - 🪟 **透明背景** — 一键输出透明 PNG，适合做图标、贴纸
 - 🤖 **原生 AI Skill** — 在 Claude Code / Codex / Gemini CLI 里直接说"帮我画一张……"即可触发
 - ⚡ **直出本地文件** — 图片直接写盘，无中间云端上传
+- 🧭 **模型职责分离** — 编排模型和实际图片模型使用不同参数，避免误判后端
+- 🩺 **可审计诊断** — 支持重试控制和不保存图片 Base64 的 SSE 摘要
 
 ## 📦 安装
 
-**macOS / Linux**
+需要 Node.js 20 或更高版本。请先克隆或打开已审阅的 checkout，再从仓库内运行安装脚本；本 fork 不支持会覆盖现有目录的 `curl | bash` 或 `irm | iex` 安装。
+
+在已审阅 checkout 的仓库根目录运行：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aisparkedu/imgen/main/install-skill.sh | bash
+./install-skill.sh
 ```
 
-**Windows**（PowerShell）
+个人 GitHub fork 创建后，才使用它的已核实地址克隆新的工作副本。
 
-```powershell
-irm https://raw.githubusercontent.com/aisparkedu/imgen/main/install-skill.ps1 | iex
+尚未创建个人 GitHub fork 时，可直接在当前本地仓库执行：
+
+```bash
+npm ci
+npm test
+npm run build
+npm link
 ```
 
-自动完成：依赖安装 → 注册全局 `imgen` 命令 → 为 Claude Code / Codex / Gemini CLI 安装 Skill。
-
-> **前提**：已安装 [Codex CLI](https://github.com/openai/codex) 并完成登录；Windows 仅支持 64 位（x64）。
+macOS/Linux 安装脚本会把个人技能入口安装到 `~/.agents/skills/imgen` 后同步共享技能；Windows 使用 `install-skill.ps1`。
 
 ## 🚀 用法
 
@@ -49,9 +47,11 @@ imgen [options] <prompt>
   -o, --out <path>        输出路径（默认 ./image-<时间戳>.png）
   -n, --count <num>       生成数量
   -s, --size <size>       尺寸，如 1024x1024 / 1024x1536 / 3840x2160
-  -q, --quality <q>       low | medium | high | auto
+  -q, --quality <q>       low | medium | high | xhigh | max | auto
   -b, --background <bg>   transparent | opaque | auto
-  -m, --model <model>     编排模型（默认 gpt-5.4）
+  -m, --model <model>     编排模型（负责调用图片工具）
+  --image-model <model>   图片模型（如 gpt-image-2.5-sunburst / flare）
+  --backend <backend>     chatgpt（订阅额度）| openai-api（官方 API Key）
 ```
 
 ## 💡 示例
@@ -63,12 +63,21 @@ imgen "a red fox in snow" -o fox.png
 # 图生图
 imgen "make it night, neon lights" -i fox.png -o fox-night.png
 
-# 4K 壁纸
-imgen "a nebula wallpaper" -s 3840x2160 -q high -o nebula.png
+# 官方 API：2.5 Sunburst 4K 最终图（需 OPENAI_API_KEY）
+imgen "a nebula wallpaper" --backend openai-api --image-model gpt-image-2.5-sunburst -s 3840x2160 -q max -o nebula.png
+
+# 官方 API：2.5 Flare 快速日常出图
+imgen "a clean editorial illustration" --backend openai-api --image-model gpt-image-2.5-flare -q low -o draft.png
 
 # 透明贴纸
 imgen "a cute cat sticker" -b transparent -o cat.png
 ```
+
+`chatgpt` 后端复用 ChatGPT/Codex 登录与订阅额度，但不回显实际图片后端；要明确、可验证地指定 GPT Image 2.5，请使用 `openai-api` 后端。API 模式从环境变量读取 `OPENAI_API_KEY`，不会把 Key 写入命令行参数或配置文件。
+
+输入图片会发送到所选 OpenAI 后端处理；“直出本地文件”只表示结果不经过额外的第三方存储服务。
+
+官方能力说明：[GPT Image 2.5 Sunburst](https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst) · [GPT Image 2.5 Flare](https://developers.openai.com/api/docs/models/gpt-image-2.5-flare) · [Image generation guide](https://developers.openai.com/api/docs/guides/image-generation)
 
 ## 🤖 AI Skill 用法
 
@@ -80,6 +89,16 @@ imgen "a cute cat sticker" -b transparent -o cat.png
 | Codex | "生成一个透明背景的 logo" |
 | Gemini CLI | "把这张图改成赛博朋克风" |
 
+## 🛠️ 开发与验证
+
+```bash
+npm test
+npm run build
+git diff --check
+```
+
+`src/` 是实现源码，`dist/` 是随源码重新构建的发布产物。测试只证明客户端请求、解析和错误处理；账户权限、服务运行状态及真实出图结果需要分别验证。上游同步和发布边界见 [FORK.md](FORK.md)。
+
 ## 📄 License
 
-MIT © [lawrencewzen](https://github.com/lawrencewzen)
+MIT。原项目版权与许可见 [LICENSE](LICENSE)，本 fork 保留原作者归属。

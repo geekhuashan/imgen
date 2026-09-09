@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-REPO="https://github.com/aisparkedu/imgen.git"
-INSTALL_DIR="$HOME/.local/share/imgen"
-
-# When piped via curl, $0 is "bash" and the script has no file path.
-# Clone the repo to a stable location and run from there.
-if [ ! -f "$(dirname "$0")/package.json" ]; then
-  echo "==> Cloning imgen..."
-  rm -rf "$INSTALL_DIR"
-  git clone --depth 1 "$REPO" "$INSTALL_DIR"
-  exec "$INSTALL_DIR/install-skill.sh"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
+if [ ! -f "$SCRIPT_DIR/package.json" ]; then
+  echo "拒绝远程管道安装：请先克隆或打开已审阅的 imgen fork，再从仓库内运行 install-skill.sh。" >&2
+  exit 2
 fi
 
-PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$SCRIPT_DIR"
+SKILL_DIR="$HOME/.agents/skills/imgen"
+SYNC_SHARED_SKILLS="$HOME/.local/bin/sync-shared-skills"
 
-echo "==> Installing dependencies..."
+echo "==> Installing locked dependencies..."
 cd "$PROJECT_DIR"
-npm install
+npm ci
+
+echo "==> Testing and building imgen..."
+npm test
+npm run build
 
 echo "==> Linking imgen CLI globally..."
 npm link
@@ -25,21 +25,25 @@ npm link
 install_skill() {
   local skill_dir="$1"
   if [ -L "$skill_dir" ]; then
-    rm "$skill_dir"
+    unlink "$skill_dir"
   elif [ -e "$skill_dir" ]; then
-    echo "Warning: $skill_dir exists and is not a symlink, skipping."
-    return
+    echo "拒绝覆盖非符号链接：$skill_dir" >&2
+    exit 2
   fi
   mkdir -p "$(dirname "$skill_dir")"
   ln -s "$PROJECT_DIR" "$skill_dir"
   echo "  $skill_dir -> $PROJECT_DIR"
 }
 
-echo "==> Installing skills..."
-install_skill "$HOME/.claude/skills/imgen"
-install_skill "$HOME/.codex/skills/imgen"
-install_skill "$HOME/.gemini/skills/imgen"
+echo "==> Installing the canonical personal skill..."
+install_skill "$SKILL_DIR"
+
+if [ -x "$SYNC_SHARED_SKILLS" ]; then
+  "$SYNC_SHARED_SKILLS" --adopt
+else
+  echo "Warning: 未找到 $SYNC_SHARED_SKILLS；个人技能已安装，但共享技能尚未同步。" >&2
+fi
 
 echo ""
-echo "Done. imgen CLI: $(which imgen)"
-echo "Restart Claude Code / Codex / Gemini CLI to activate the skill."
+echo "Done. imgen CLI: $(command -v imgen)"
+echo "Skill: $SKILL_DIR -> $PROJECT_DIR"

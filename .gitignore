@@ -2,6 +2,7 @@ node_modules/
 *.log
 .DS_Store
 image-*.png
-package-lock.json
-docs/
-.github/
+*.imgen-sse.jsonl
+.env
+.env.*
+!.env.example

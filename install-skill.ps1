@@ -1,23 +1,23 @@
 $ErrorActionPreference = 'Stop'
 
-$Repo = 'https://github.com/aisparkedu/imgen.git'
-$InstallDir = Join-Path $HOME '.local\share\imgen'
-
-# 通过 `irm ... | iex` 执行时拿不到脚本路径（$PSScriptRoot 为空），
-# 克隆到固定位置后从那里继续，避免二次加载磁盘脚本受 ExecutionPolicy 限制。
 $ProjectDir = $PSScriptRoot
 if (-not $ProjectDir -or -not (Test-Path (Join-Path $ProjectDir 'package.json'))) {
-    Write-Host '==> Cloning imgen...'
-    if (Test-Path $InstallDir) { Remove-Item -Recurse -Force $InstallDir }
-    git clone --depth 1 $Repo $InstallDir
-    $ProjectDir = $InstallDir
+    throw '拒绝远程管道安装：请先克隆或打开已审阅的 imgen fork，再从仓库内运行 install-skill.ps1。'
 }
+
+$SkillDir = Join-Path $HOME '.agents\skills\imgen'
 
 Push-Location $ProjectDir
 try {
-    Write-Host '==> Installing dependencies...'
-    npm install
-    if ($LASTEXITCODE -ne 0) { throw 'npm install failed' }
+    Write-Host '==> Installing locked dependencies...'
+    npm ci
+    if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
+
+    Write-Host '==> Testing and building imgen...'
+    npm test
+    if ($LASTEXITCODE -ne 0) { throw 'npm test failed' }
+    npm run build
+    if ($LASTEXITCODE -ne 0) { throw 'npm run build failed' }
 
     Write-Host '==> Linking imgen CLI globally...'
     npm link
@@ -30,8 +30,7 @@ try {
                 # 已是链接/junction，只删链接本身（.Delete() 不会递归删 target）
                 $item.Delete()
             } else {
-                Write-Host "Warning: $SkillDir exists and is not a link, skipping."
-                return
+                throw "拒绝覆盖非链接目录：$SkillDir"
             }
         }
         New-Item -ItemType Directory -Force -Path (Split-Path $SkillDir -Parent) | Out-Null
@@ -40,10 +39,16 @@ try {
         Write-Host "  $SkillDir -> $ProjectDir"
     }
 
-    Write-Host '==> Installing skills...'
-    Install-Skill (Join-Path $HOME '.claude\skills\imgen')
-    Install-Skill (Join-Path $HOME '.codex\skills\imgen')
-    Install-Skill (Join-Path $HOME '.gemini\skills\imgen')
+    Write-Host '==> Installing the canonical personal skill...'
+    Install-Skill $SkillDir
+
+    $syncSharedSkills = Join-Path $HOME '.local\bin\sync-shared-skills'
+    if (Test-Path $syncSharedSkills) {
+        & $syncSharedSkills --adopt
+        if ($LASTEXITCODE -ne 0) { throw 'sync-shared-skills failed' }
+    } else {
+        Write-Warning "未找到 $syncSharedSkills；个人技能已安装，但共享技能尚未同步。"
+    }
 
     Write-Host ''
     $imgen = (Get-Command imgen -ErrorAction SilentlyContinue).Source
@@ -52,7 +57,7 @@ try {
     } else {
         Write-Host 'Done. imgen CLI linked (open a new terminal if `imgen` is not found).'
     }
-    Write-Host 'Restart Claude Code / Codex / Gemini CLI to activate the skill.'
+    Write-Host "Skill: $SkillDir -> $ProjectDir"
 } finally {
     Pop-Location
 }

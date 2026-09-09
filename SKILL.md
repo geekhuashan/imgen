@@ -34,9 +34,11 @@ imgen "<想怎么改>" -i <输入.png> -o <输出.png>
 | 参数 | 说明 |
 |---|---|
 | `-s, --size` | 如 `1024x1024` / `1024x1536` / `3840x2160`(4K)；最长边 ≤ 3840；默认 auto |
-| `-q, --quality` | `low` / `medium` / `high` / `auto`（默认 auto） |
+| `-q, --quality` | `low` / `medium` / `high` / `xhigh` / `max` / `auto`（默认 auto） |
 | `-b, --background` | `transparent`（透明，做贴纸/图标）/ `opaque` / `auto` |
 | `-n, --count` | 生成数量（>1 输出 `out-1.png` `out-2.png`…） |
+| `--image-model` | `gpt-image-2.5-sunburst`（精细编辑/最终图）或 `gpt-image-2.5-flare`（快速日常出图）；默认 auto |
+| `--backend` | `chatgpt` 复用订阅额度（默认）；`openai-api` 通过官方 API 明确使用 2.5，需 `OPENAI_API_KEY` |
 
 ## 流程
 
@@ -46,6 +48,14 @@ imgen "<想怎么改>" -i <输入.png> -o <输出.png>
 4. **跑命令**：约 15-30 秒/张，给足超时（Bash `timeout` 设 180000 左右）。
 5. **展示**：生成后用 **Read 工具读这张 PNG** 直接展示给用户，并报保存路径。
 6. **失败**：把 imgen 的报错原样转达（401/403=账号问题、429=限流、400=参数如尺寸超限）。
+
+明确要求 GPT Image 2.5 时使用官方 API 后端，并根据任务选择模型：
+
+```bash
+imgen "<prompt>" --backend openai-api --image-model gpt-image-2.5-sunburst -q high -o <输出.png>
+```
+
+不要把 `-m/--model` 当成图片模型；它只选择负责调用图片工具的编排模型。`chatgpt` 后端不回显实际图片后端，不能据此声称已经使用 GPT Image 2.5。
 
 ## 例子
 
@@ -70,5 +80,5 @@ imgen "a cute cartoon cat sticker, bold clean outline" -b transparent -o cat.png
 
 ## 注意
 
-- 需已完成 Codex CLI 登录；未登录会 401/403。
+- 默认 `chatgpt` 后端需已完成 Codex CLI 登录；`openai-api` 后端需设置 `OPENAI_API_KEY`，两条认证链路互不替代。
 - 分辨率上限：最长边 **3840px**（4K UHD `3840x2160` 可，`4096` 会被拒）。

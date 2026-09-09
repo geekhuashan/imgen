@@ -22,6 +22,9 @@ interface CliOptions {
   quality: string;
   background: string;
   model: string;
+  imageModel: string;
+  backend: string;
+  reasoningEffort: string;
   codexHome: string;
 }
 
@@ -37,18 +40,33 @@ async function run(prompt: string, opts: CliOptions): Promise<void> {
   }
   const out = opts.out ?? `./image-${Math.floor(Date.now() / 1000)}.png`;
 
-  const { accessToken, accountId } = await ensureValidToken(opts.codexHome);
-  const identity = loadOrCreateIdentity(opts.codexHome);
+  if (opts.backend !== "chatgpt" && opts.backend !== "openai-api") {
+    throw usageError(`--backend 只支持 chatgpt 或 openai-api，收到: ${opts.backend}`);
+  }
+  const backend = opts.backend;
+  let accessToken: string;
+  let accountId = "";
+  let identity;
+  if (backend === "openai-api") {
+    accessToken = process.env["OPENAI_API_KEY"]?.trim() ?? "";
+    if (!accessToken) {
+      throw usageError("使用 --backend openai-api 前，请先设置 OPENAI_API_KEY");
+    }
+  } else {
+    ({ accessToken, accountId } = await ensureValidToken(opts.codexHome));
+    identity = loadOrCreateIdentity(opts.codexHome);
+  }
 
   // One TLS session for the entire CLI run (matches real Codex connection reuse)
   const session = new ImpersonatedSession(
     REQUEST_TIMEOUT_S,
-    identity.tls.ja3,
-    identity.tls.akamai,
+    identity?.tls.ja3 ?? "auto",
+    identity?.tls.akamai ?? "auto",
   );
 
   try {
     const ctx: RequestContext = {
+      backend,
       session,
       token: accessToken,
       accountId,
@@ -60,6 +78,11 @@ async function run(prompt: string, opts: CliOptions): Promise<void> {
     const base: GenOptions = {
       prompt,
       model: opts.model,
+      imageModel:
+        backend === "openai-api" && opts.imageModel === "auto"
+          ? "gpt-image-2.5-sunburst"
+          : opts.imageModel,
+      reasoningEffort: opts.reasoningEffort,
       size: opts.size,
       quality: opts.quality,
       background: opts.background,
@@ -97,9 +120,16 @@ program
   .option("-o, --out <path>", "输出路径（默认 ./image-<时间戳>.png）")
   .option("-n, --count <num>", "生成数量", "1")
   .option("-s, --size <size>", "尺寸，如 1024x1024 / 3840x2160（最长边 ≤3840），默认 auto", "auto")
-  .option("-q, --quality <q>", "low|medium|high|auto", "auto")
+  .option("-q, --quality <q>", "low|medium|high|xhigh|max|auto", "auto")
   .option("-b, --background <bg>", "transparent|opaque|auto", "auto")
   .option("-m, --model <model>", "编排模型（负责调用图片工具）", "gpt-5.5")
+  .option(
+    "--image-model <model>",
+    "图片模型：auto|gpt-image-2.5-sunburst|gpt-image-2.5-flare",
+    "auto",
+  )
+  .option("--backend <backend>", "chatgpt（订阅额度）|openai-api（官方 API Key）", "chatgpt")
+  .option("--reasoning-effort <effort>", "low|medium|high|xhigh|max|ultra", "medium")
   .option("--codex-home <dir>", "codex 目录", defaultCodexHome())
   .action(async (prompt: string, opts: CliOptions) => {
     await run(prompt, opts);
