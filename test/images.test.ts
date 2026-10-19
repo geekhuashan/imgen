@@ -280,6 +280,41 @@ test("generate 的 OpenAI API 后端使用官方 Responses URL 和显式图片�
   assert.equal(tools[0]?.["quality"], "xhigh");
 });
 
+test("generate 的 CLIProxy 后端发到 <base>/responses，保留 Codex 请求体", async () => {
+  const final = "B".repeat(512);
+  let captured: { url: string; headers: Record<string, string>; body: Record<string, unknown> } | null = null;
+  const context = {
+    backend: "cliproxy",
+    baseUrl: "https://proxy.example.test/v1/",
+    session: {
+      post: async (url: string, headers: Record<string, string>, rawBody: string) => {
+        captured = { url, headers, body: JSON.parse(rawBody) as Record<string, unknown> };
+        return {
+          status: 200,
+          text:
+            `data: {"type":"response.output_item.done","item":{"type":"image_generation_call","result":"${final}","size":"1024x1024"}}\n\n` +
+            `data: {"type":"response.completed"}\n\n`,
+        };
+      },
+    },
+    token: "test-proxy-key",
+    accountId: "",
+    sessionId: "test-session",
+    threadId: "test-thread",
+  } as unknown as RequestContext;
+
+  const result = await generate(context, baseOpts);
+  assert.equal(result.b64, final);
+  assert.ok(captured);
+  assert.equal(captured.url, "https://proxy.example.test/v1/responses");
+  assert.equal(captured.headers["Authorization"], "Bearer test-proxy-key");
+  assert.equal("ChatGPT-Account-Id" in captured.headers, false);
+  assert.equal("client_metadata" in captured.body, false);
+  assert.equal(typeof captured.body["instructions"], "string");
+  const tools = captured.body["tools"] as Array<Record<string, unknown>>;
+  assert.equal(tools[0]?.["type"], "image_generation");
+});
+
 test("usageError 带 exitCode 2", () => {
   assert.equal((usageError("bad") as { exitCode?: number }).exitCode, 2);
 });

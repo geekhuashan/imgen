@@ -11,7 +11,7 @@ const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 export const REQUEST_TIMEOUT_S = 600;
 const MAX_EDIT_IMAGES = 5;
 
-export type ImageBackend = "chatgpt" | "openai-api";
+export type ImageBackend = "chatgpt" | "openai-api" | "cliproxy";
 
 const MIME_BY_EXT: Record<string, string> = {
   ".png": "image/png",
@@ -47,6 +47,8 @@ export interface ImageResult {
 /** All per-request context needed to talk to the backend. */
 export interface RequestContext {
   backend?: ImageBackend;
+  /** CLIProxy only: OpenAI-compatible base URL ending in /v1. */
+  baseUrl?: string;
   session: ImpersonatedSession;
   token: string;
   accountId: string;
@@ -404,6 +406,9 @@ function mapHttpError(status: number, text: string, backend: ImageBackend): Erro
     if (backend === "openai-api") {
       return new Error(`OpenAI API 认证/权限失败 (${status})：请检查 API Key、项目权限及模型访问。${detail}`);
     }
+    if (backend === "cliproxy") {
+      return new Error(`CLIProxy 认证失败 (${status})：请检查 CLIPROXY_API_KEY。${detail}`);
+    }
     return new Error(`认证/权限失败 (${status})：账号可能是免费号，图片生成需 Plus/Pro。${detail}`);
   }
   if (status === 429) return new Error(`撞限流 (429)：稍后再试。${detail}`);
@@ -483,6 +488,12 @@ async function runRequestOnce(
     hdrs = buildOpenAiApiHeaders(ctx.token);
     const { instructions: _instructions, include: _include, ...apiRequest } = request;
     body = apiRequest;
+  } else if (backend === "cliproxy") {
+    if (!ctx.baseUrl) throw new Error("CLIProxy 后端缺少地址");
+    url = `${ctx.baseUrl.replace(/\/+$/, "")}/responses`;
+    hdrs = buildOpenAiApiHeaders(ctx.token);
+    // The proxy picks the Codex account and supplies its own client identity; the body stays Codex-shaped.
+    body = request;
   } else {
     if (!ctx.identity) throw new Error("ChatGPT 后端缺少 Codex 客户端身份");
     url = CHATGPT_RESPONSES_URL;

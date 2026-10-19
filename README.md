@@ -51,7 +51,8 @@ imgen [options] <prompt>
   -b, --background <bg>   transparent | opaque | auto
   -m, --model <model>     编排模型（负责调用图片工具）
   --image-model <model>   图片模型（如 gpt-image-2.5-sunburst / flare）
-  --backend <backend>     chatgpt（订阅额度）| openai-api（官方 API Key）
+  --backend <backend>     chatgpt（订阅额度）| openai-api（官方 API Key）| cliproxy（CLIProxy 账号池）
+                          默认取环境变量 IMGEN_BACKEND，未设置时为 chatgpt
 ```
 
 ## 💡 示例
@@ -74,6 +75,8 @@ imgen "a cute cat sticker" -b transparent -o cat.png
 ```
 
 `chatgpt` 后端复用 ChatGPT/Codex 登录与订阅额度，但不回显实际图片后端；要明确、可验证地指定 GPT Image 2.5，请使用 `openai-api` 后端。API 模式从环境变量读取 `OPENAI_API_KEY`，不会把 Key 写入命令行参数或配置文件。
+
+`cliproxy` 后端把同样的 Codex 请求发到 [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) 的 `<地址>/responses`，由代理按自己的账号优先级挑选 Codex 订阅账号，一个账号额度用完会换下一个。需要 `IMGEN_CLIPROXY_BASE_URL`（如 `https://host/v1`）和 `CLIPROXY_API_KEY`（或指向密钥文件的 `IMGEN_CLIPROXY_KEY_FILE`）；代理须把 `disable-image-generation` 设为 `false` 或 `"passthrough"`，`"chat"` 会在该端点去掉图片工具。
 
 输入图片会发送到所选 OpenAI 后端处理；“直出本地文件”只表示结果不经过额外的第三方存储服务。
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { randomUUID, randomInt } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { ensureValidToken, defaultCodexHome } from "./auth.js";
 import { generate, edit, usageError, REQUEST_TIMEOUT_S, } from "./images.js";
 import { loadOrCreateIdentity } from "./fingerprint.js";
@@ -16,17 +17,28 @@ async function run(prompt, opts) {
         throw usageError(`-n/--count 必须是正整数，收到: ${opts.count}`);
     }
     const out = opts.out ?? `./image-${Math.floor(Date.now() / 1000)}.png`;
-    if (opts.backend !== "chatgpt" && opts.backend !== "openai-api") {
-        throw usageError(`--backend 只支持 chatgpt 或 openai-api，收到: ${opts.backend}`);
+    if (opts.backend !== "chatgpt" && opts.backend !== "openai-api" && opts.backend !== "cliproxy") {
+        throw usageError(`--backend 只支持 chatgpt、openai-api 或 cliproxy，收到: ${opts.backend}`);
     }
     const backend = opts.backend;
     let accessToken;
     let accountId = "";
     let identity;
+    let baseUrl;
     if (backend === "openai-api") {
         accessToken = process.env["OPENAI_API_KEY"]?.trim() ?? "";
         if (!accessToken) {
             throw usageError("使用 --backend openai-api 前，请先设置 OPENAI_API_KEY");
+        }
+    }
+    else if (backend === "cliproxy") {
+        baseUrl = process.env["IMGEN_CLIPROXY_BASE_URL"]?.trim() || undefined;
+        accessToken = process.env["CLIPROXY_API_KEY"]?.trim() ?? "";
+        const keyFile = process.env["IMGEN_CLIPROXY_KEY_FILE"]?.trim();
+        if (!accessToken && keyFile)
+            accessToken = readFileSync(keyFile, "utf8").trim();
+        if (!baseUrl || !accessToken) {
+            throw usageError("使用 --backend cliproxy 前，请设置 IMGEN_CLIPROXY_BASE_URL（如 https://host/v1），以及 CLIPROXY_API_KEY 或 IMGEN_CLIPROXY_KEY_FILE");
         }
     }
     else {
@@ -38,6 +50,7 @@ async function run(prompt, opts) {
     try {
         const ctx = {
             backend,
+            baseUrl,
             session,
             token: accessToken,
             accountId,
@@ -94,7 +107,7 @@ program
     .option("-b, --background <bg>", "transparent|opaque|auto", "auto")
     .option("-m, --model <model>", "编排模型（负责调用图片工具）", "gpt-5.6-luna")
     .option("--image-model <model>", "图片模型：auto|gpt-image-2.5-sunburst|gpt-image-2.5-flare", "auto")
-    .option("--backend <backend>", "chatgpt（订阅额度）|openai-api（官方 API Key）", "chatgpt")
+    .option("--backend <backend>", "chatgpt（订阅额度）|openai-api（官方 API Key）|cliproxy（CLIProxy 账号池）；默认取 IMGEN_BACKEND", process.env["IMGEN_BACKEND"]?.trim() || "chatgpt")
     .option("--reasoning-effort <effort>", "low|medium|high|xhigh|max|ultra", "medium")
     .option("--codex-home <dir>", "codex 目录", defaultCodexHome())
     .action(async (prompt, opts) => {
