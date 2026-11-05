@@ -138,7 +138,7 @@ program
   .option("-m, --model <model>", "编排模型（负责调用图片工具）", "gpt-5.6-luna")
   .option(
     "--image-model <model>",
-    "图片模型：auto|gpt-image-2.5-sunburst|gpt-image-2.5-flare",
+    "图片模型：auto|gpt-image-2.5-sunburst|gpt-image-2.5-flare；仅 openai-api 生效，chatgpt/cliproxy 固定 gpt-image-2-codex",
     "auto",
   )
   .option(

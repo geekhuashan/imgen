@@ -106,7 +106,7 @@ program
     .option("-q, --quality <q>", "low|medium|high|xhigh|max|auto", "auto")
     .option("-b, --background <bg>", "transparent|opaque|auto", "auto")
     .option("-m, --model <model>", "编排模型（负责调用图片工具）", "gpt-5.6-luna")
-    .option("--image-model <model>", "图片模型：auto|gpt-image-2.5-sunburst|gpt-image-2.5-flare", "auto")
+    .option("--image-model <model>", "图片模型：auto|gpt-image-2.5-sunburst|gpt-image-2.5-flare；仅 openai-api 生效，chatgpt/cliproxy 固定 gpt-image-2-codex", "auto")
     .option("--backend <backend>", "chatgpt（订阅额度）|openai-api（官方 API Key）|cliproxy（CLIProxy 账号池）；默认取 IMGEN_BACKEND", process.env["IMGEN_BACKEND"]?.trim() || "chatgpt")
     .option("--reasoning-effort <effort>", "low|medium|high|xhigh|max|ultra；仅 openai-api 下发，chatgpt/cliproxy 用模型默认值", "medium")
     .option("--codex-home <dir>", "codex 目录", defaultCodexHome())

@@ -24,6 +24,8 @@ GPT Image 2.5 的模型名与能力以 OpenAI 官方文档为准：[Sunburst](ht
 
 - 2026-11-05（Hermes 诊断记录里最后一次出图在 11-04 21:17，11-05 07:00 起失败）：ChatGPT Codex 后端把请求里显式的 `reasoning.effort` 当作图片工具的 `complexity`，返回 `image_generation_user_error`（`param: complexity`）。响应回显的图片模型固定为 `gpt-image-2-codex`，`none`、`low`、`medium`、`max` 都被拒；工具字段写 `complexity` 同样被拒，写 `auto` 直接 400。与编排模型、`--image-model`、尺寸和质量无关。
 - 因此 `chatgpt` 与 `cliproxy`（含 Magpie 网关）不再发送 `reasoning`，由服务端用编排模型默认值（`gpt-5.6-luna` 回显为 `medium`），`--reasoning-effort` 在这两个后端不生效。`openai-api` 未实测，保持原样。后端修好后可再评估恢复。
+- 订阅额度调不到 GPT Image 2.5/2.6（2026-11-05 用 Plus 账号实测，直连和 Magpie 结果相同）：`tools[0].model` 写 2.5、2.6 甚至不存在的名字都会成功，回显一律是 `gpt-image-2-codex`；顶层 `model` 写图片模型返回 400（不支持 ChatGPT 账号）；模型目录里没有图片模型。Codex 后端的 `images/generations` 同样接受不存在的模型名，还忽略 `complexity`、`output_format: svg` 和 `size`，且不回显模型。
+- 官方文档：2.5 可作 Responses 图片工具的模型，现有 `openai-api` 后端可用；2.6 只支持 `v1/images/generations` 和 `v1/images/edits`，不支持 Responses，接入要给 `openai-api` 增加 Image API 路径。两者都按量付费，尚未实测。
 
 ## 远端约定
 

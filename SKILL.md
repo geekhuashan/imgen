@@ -37,7 +37,7 @@ imgen "<想怎么改>" -i <输入.png> -o <输出.png>
 | `-q, --quality` | `low` / `medium` / `high` / `xhigh` / `max` / `auto`（默认 auto） |
 | `-b, --background` | `transparent`（透明，做贴纸/图标）/ `opaque` / `auto` |
 | `-n, --count` | 生成数量（>1 输出 `out-1.png` `out-2.png`…） |
-| `--image-model` | `gpt-image-2.5-sunburst`（精细编辑/最终图）或 `gpt-image-2.5-flare`（快速日常出图）；默认 auto |
+| `--image-model` | 仅 `openai-api` 生效：`gpt-image-2.5-sunburst`（精细编辑/最终图）或 `gpt-image-2.5-flare`（快速日常出图）；默认 auto |
 | `--backend` | `chatgpt` 复用订阅额度（默认）；`openai-api` 通过官方 API 明确使用 2.5，需 `OPENAI_API_KEY` |
 
 ## 流程
@@ -55,7 +55,7 @@ imgen "<想怎么改>" -i <输入.png> -o <输出.png>
 imgen "<prompt>" --backend openai-api --image-model gpt-image-2.5-sunburst -q high -o <输出.png>
 ```
 
-不要把 `-m/--model` 当成图片模型；它只选择负责调用图片工具的编排模型。`chatgpt` 后端不回显实际图片后端，不能据此声称已经使用 GPT Image 2.5。
+不要把 `-m/--model` 当成图片模型；它只选择负责调用图片工具的编排模型。`chatgpt` 和 `cliproxy` 后端固定使用 `gpt-image-2-codex`，`--image-model` 和 `--reasoning-effort` 在这两个后端不生效，成功出图不能当作使用了 GPT Image 2.5 或 2.6 的证据。
 
 ## 例子
 
