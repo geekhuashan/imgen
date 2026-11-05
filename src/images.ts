@@ -230,6 +230,13 @@ interface ParsedSse {
   parseErrorCount: number;
 }
 
+/** Model settings on one side of a request; null means absent, never "same as requested". */
+export interface ImageModelEvidence {
+  orchestrator_model: string | null;
+  image_model: string | null;
+  reasoning_effort: string | null;
+}
+
 export interface SseEventSummary {
   response_bytes: number;
   line_count: number;
@@ -244,6 +251,8 @@ export interface SseEventSummary {
   partial_image_b64_lengths: number[];
   has_failure: boolean;
   failure_messages: string[];
+  /** What the backend echoed in `response.*` events; the CLI flags are only requests. */
+  response_echo: ImageModelEvidence | null;
 }
 
 export interface SseEventDiagnosticRecord extends SseEventSummary {
@@ -256,6 +265,8 @@ export interface SseEventDiagnosticRecord extends SseEventSummary {
   duration_ms: number;
   http_status: number | null;
   transport_error: string | null;
+  /** What this request body carried after per-backend stripping (e.g. no reasoning). */
+  request_sent: ImageModelEvidence;
 }
 
 function parseSseWithStats(text: string): ParsedSse {
@@ -297,6 +308,46 @@ function redactDiagnosticText(value: string): string {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 1000);
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/** Read model settings from a request body or an echoed `response` object. */
+function modelEvidenceFrom(source: Record<string, unknown>): ImageModelEvidence {
+  const tools = Array.isArray(source["tools"]) ? source["tools"] : [];
+  const records = tools.map(asRecord);
+  const tool = records.find((t) => t?.["type"] === "image_generation") ?? records[0] ?? null;
+  return {
+    orchestrator_model: stringOrNull(source["model"]),
+    image_model: stringOrNull(tool?.["model"]),
+    reasoning_effort: stringOrNull(asRecord(source["reasoning"])?.["effort"]),
+  };
+}
+
+/** Later events win, but a sparse event must not erase what an earlier one echoed. */
+function responseEchoFrom(events: SseEvent[]): ImageModelEvidence | null {
+  const echo: ImageModelEvidence = {
+    orchestrator_model: null,
+    image_model: null,
+    reasoning_effort: null,
+  };
+  for (const event of events) {
+    const response = asRecord(event["response"]);
+    if (!response) continue;
+    const next = modelEvidenceFrom(response);
+    echo.orchestrator_model = next.orchestrator_model ?? echo.orchestrator_model;
+    echo.image_model = next.image_model ?? echo.image_model;
+    echo.reasoning_effort = next.reasoning_effort ?? echo.reasoning_effort;
+  }
+  return Object.values(echo).some((value) => value !== null) ? echo : null;
 }
 
 /** Summarize SSE structure without persisting image Base64 bodies. */
@@ -350,6 +401,7 @@ export function summarizeSse(text: string): SseEventSummary {
     partial_image_b64_lengths: partialImageLengths,
     has_failure: failureMessages.length > 0,
     failure_messages: failureMessages,
+    response_echo: responseEchoFrom(parsed.events),
   };
 }
 
@@ -535,6 +587,7 @@ async function runRequestOnce(
       duration_ms: Date.now() - startedAt,
       http_status: null,
       transport_error: transportError,
+      request_sent: modelEvidenceFrom(body),
       ...summarizeSse(""),
     });
     throw error;
@@ -549,6 +602,7 @@ async function runRequestOnce(
     duration_ms: Date.now() - startedAt,
     http_status: res.status,
     transport_error: null,
+    request_sent: modelEvidenceFrom(body),
     ...summarizeSse(res.text),
   });
   if (res.status !== 200) throw mapHttpError(res.status, res.text, backend);

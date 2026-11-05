@@ -136,6 +136,26 @@ test("summarizeSse 保存事件结构和图片长度但不泄露 Base64", () => 
   assert.equal(serialized.includes(partial), false);
 });
 
+test("summarizeSse 记录后端回显的模型，稀疏事件不会覆盖已有回显", () => {
+  const created = JSON.stringify({
+    type: "response.created",
+    response: {
+      model: "gpt-5.6-luna",
+      reasoning: { effort: "medium" },
+      tools: [{ type: "image_generation", model: "gpt-image-2-codex" }],
+    },
+  });
+  const sse =
+    `data: ${created}\n\n` +
+    `data: {"type":"response.completed","response":{"id":"resp_1"}}\n\n`;
+  assert.deepEqual(summarizeSse(sse).response_echo, {
+    orchestrator_model: "gpt-5.6-luna",
+    image_model: "gpt-image-2-codex",
+    reasoning_effort: "medium",
+  });
+  assert.equal(summarizeSse(`data: {"type":"response.completed"}\n\n`).response_echo, null);
+});
+
 test("appendSseEventDiagnostic 追加脱敏 JSONL 记录", () => {
   const dir = mkdtempSync(join(tmpdir(), "imgen-sse-"));
   try {
@@ -153,6 +173,7 @@ test("appendSseEventDiagnostic 追加脱敏 JSONL 记录", () => {
       duration_ms: 123,
       http_status: 200,
       transport_error: null,
+      request_sent: { orchestrator_model: "m", image_model: "i", reasoning_effort: null },
       ...summary,
     };
     appendSseEventDiagnostic(path, record);
@@ -228,6 +249,11 @@ test("generate 自动记录 HTTP SSE 摘要和 transport_error", async () => {
     assert.equal(success.http_status, 200);
     assert.equal(success.outer_attempt, 9);
     assert.deepEqual(success.final_image_b64_lengths, [512]);
+    // The Codex-shaped backend strips reasoning, so the record must not claim it was sent.
+    assert.equal(success.request_sent.orchestrator_model, baseOpts.model);
+    assert.equal(success.request_sent.reasoning_effort, null);
+    assert.equal(transport.request_sent.reasoning_effort, null);
+    assert.equal(transport.response_echo, null);
     assert.equal(transport.http_status, null);
     assert.equal(transport.transport_error, "HTTP/2 socket framing failure");
     assert.equal(lines.join("").includes(final), false);
