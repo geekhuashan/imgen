@@ -130,6 +130,16 @@ export function buildRequest(o, imageParts) {
         include: ["reasoning.encrypted_content"],
     };
 }
+/**
+ * Codex-shaped backends (chatgpt, cliproxy/magpie) must not send reasoning.effort:
+ * since 2026-11-05 the backend forwards an explicit effort to the image tool as
+ * `complexity`, which gpt-image-2-codex rejects for every value. Without it the
+ * backend uses the orchestrator model's default effort. See FORK.md.
+ */
+function withoutReasoning(request) {
+    const { reasoning: _reasoning, ...rest } = request;
+    return rest;
+}
 function parseSseWithStats(text) {
     const events = [];
     const lines = text.split(/\r?\n/);
@@ -355,7 +365,7 @@ async function runRequestOnce(ctx, request, invocationId, internalAttempt) {
         url = `${ctx.baseUrl.replace(/\/+$/, "")}/responses`;
         hdrs = buildOpenAiApiHeaders(ctx.token);
         // The proxy picks the Codex account and supplies its own client identity; the body stays Codex-shaped.
-        body = request;
+        body = withoutReasoning(request);
     }
     else {
         if (!ctx.identity)
@@ -364,7 +374,7 @@ async function runRequestOnce(ctx, request, invocationId, internalAttempt) {
         hdrs = buildHeaders(ctx.token, ctx.accountId, ctx.identity, turn);
         // Enrich body with client_metadata (matches real Codex)
         body = {
-            ...request,
+            ...withoutReasoning(request),
             prompt_cache_key: ctx.threadId,
             client_metadata: {
                 "x-codex-installation-id": ctx.identity.installationId,

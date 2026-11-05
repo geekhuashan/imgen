@@ -315,6 +315,45 @@ test("generate 的 CLIProxy 后端发到 <base>/responses，保留 Codex 请求�
   assert.equal(tools[0]?.["type"], "image_generation");
 });
 
+test("generate 只在 openai-api 后端下发 reasoning effort", async () => {
+  const final = "C".repeat(512);
+  const sent = async (backend: "chatgpt" | "cliproxy" | "openai-api") => {
+    let captured: Record<string, unknown> | null = null;
+    const context = {
+      backend,
+      baseUrl: "https://proxy.example.test/v1",
+      session: {
+        post: async (_url: string, _headers: Record<string, string>, rawBody: string) => {
+          captured = JSON.parse(rawBody) as Record<string, unknown>;
+          return {
+            status: 200,
+            text: `data: {"type":"response.output_item.done","item":{"type":"image_generation_call","result":"${final}"}}\n\n`,
+          };
+        },
+      },
+      token: "test-token",
+      accountId: "test-account",
+      identity: {
+        tls: { ja3: "auto", akamai: "auto", label: "test" },
+        codexVersion: "0.0.0",
+        installationId: "test-installation",
+        osType: "darwin",
+        osVersion: "test",
+        arch: "arm64",
+      },
+      sessionId: "test-session",
+      threadId: "test-thread",
+    } as unknown as RequestContext;
+    await generate(context, { ...baseOpts, reasoningEffort: "low" });
+    assert.ok(captured);
+    return captured as Record<string, unknown>;
+  };
+
+  assert.equal("reasoning" in (await sent("chatgpt")), false);
+  assert.equal("reasoning" in (await sent("cliproxy")), false);
+  assert.deepEqual((await sent("openai-api"))["reasoning"], { effort: "low" });
+});
+
 test("usageError 带 exitCode 2", () => {
   assert.equal((usageError("bad") as { exitCode?: number }).exitCode, 2);
 });

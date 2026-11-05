@@ -12,13 +12,18 @@
 
 ## 本地增强
 
-1. 编排模型推理等级可配置。
+1. 编排模型推理等级可配置（仅 `openai-api` 下发，原因见下方“后端行为变化”）。
 2. 瞬时失败重试次数可控，并支持脱敏 SSE 结构诊断。
 3. 图片模型与编排模型分离，支持 GPT Image 2.5 Sunburst/Flare。
 4. 新增 OpenAI 官方 Responses API 后端；Key 只从环境变量读取。
 5. 安装流程失败关闭，不再通过远程脚本删除本地 fork。
 
 GPT Image 2.5 的模型名与能力以 OpenAI 官方文档为准：[Sunburst](https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst)、[Flare](https://developers.openai.com/api/docs/models/gpt-image-2.5-flare) 和 [图像生成指南](https://developers.openai.com/api/docs/guides/image-generation)。
+
+## 后端行为变化
+
+- 2026-11-05（Hermes 诊断记录里最后一次出图在 11-04 21:17，11-05 07:00 起失败）：ChatGPT Codex 后端把请求里显式的 `reasoning.effort` 当作图片工具的 `complexity`，返回 `image_generation_user_error`（`param: complexity`）。响应回显的图片模型固定为 `gpt-image-2-codex`，`none`、`low`、`medium`、`max` 都被拒；工具字段写 `complexity` 同样被拒，写 `auto` 直接 400。与编排模型、`--image-model`、尺寸和质量无关。
+- 因此 `chatgpt` 与 `cliproxy`（含 Magpie 网关）不再发送 `reasoning`，由服务端用编排模型默认值（`gpt-5.6-luna` 回显为 `medium`），`--reasoning-effort` 在这两个后端不生效。`openai-api` 未实测，保持原样。后端修好后可再评估恢复。
 
 ## 远端约定
 

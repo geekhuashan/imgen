@@ -146,7 +146,11 @@ program
     "chatgpt（订阅额度）|openai-api（官方 API Key）|cliproxy（CLIProxy 账号池）；默认取 IMGEN_BACKEND",
     process.env["IMGEN_BACKEND"]?.trim() || "chatgpt",
   )
-  .option("--reasoning-effort <effort>", "low|medium|high|xhigh|max|ultra", "medium")
+  .option(
+    "--reasoning-effort <effort>",
+    "low|medium|high|xhigh|max|ultra；仅 openai-api 下发，chatgpt/cliproxy 用模型默认值",
+    "medium",
+  )
   .option("--codex-home <dir>", "codex 目录", defaultCodexHome())
   .action(async (prompt: string, opts: CliOptions) => {
     await run(prompt, opts);
